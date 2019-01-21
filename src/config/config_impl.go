@@ -252,32 +252,35 @@ func (this *rateLimitConfigImpl) GetLimit(
 	}
 
 	descriptorsMap := value.descriptors
-	for i, entry := range descriptor.Entries {
-		// First see if key_value is in the map. If that isn't in the map we look for just key
-		// to check for a default value.
-		finalKey := entry.Key + "_" + entry.Value
-		logger.Debugf("looking up key: %s", finalKey)
-		nextDescriptor := descriptorsMap[finalKey]
-		if nextDescriptor == nil {
-			finalKey = entry.Key
+	for descriptorsMap != nil {
+		var nextDescriptor *rateLimitDescriptor
+		for _, entry := range descriptor.Entries {
+			// First see if key_value is in the map. If that isn't in the map we look for just key
+			// to check for a default value.
+			finalKey := entry.Key + "_" + entry.Value
 			logger.Debugf("looking up key: %s", finalKey)
 			nextDescriptor = descriptorsMap[finalKey]
-		}
 
-		if nextDescriptor != nil && nextDescriptor.limit != nil {
-			logger.Debugf("found rate limit: %s", finalKey)
-			if i == len(descriptor.Entries)-1 {
-				rateLimit = nextDescriptor.limit
-			} else {
-				logger.Debugf("request depth does not match config depth, there are more entries in the request's descriptor")
+			if nextDescriptor == nil {
+				finalKey = entry.Key
+				logger.Debugf("looking up key: %s", finalKey)
+				nextDescriptor = descriptorsMap[finalKey]
 			}
-		}
 
-		if nextDescriptor != nil && len(nextDescriptor.descriptors) > 0 {
-			logger.Debugf("iterating to next level")
+			if nextDescriptor == nil {
+				continue
+			}
+
+			if nextDescriptor.limit != nil {
+				logger.Debugf("found rate limit: %s", finalKey)
+				rateLimit = nextDescriptor.limit
+				descriptorsMap = nil
+				break
+			}
 			descriptorsMap = nextDescriptor.descriptors
-		} else {
-			break
+		}
+		if nextDescriptor == nil {
+			descriptorsMap = nil
 		}
 	}
 
